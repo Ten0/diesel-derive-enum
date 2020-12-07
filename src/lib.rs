@@ -186,7 +186,9 @@ fn generate_common_impl(
             type QueryId = #diesel_mapping;
             const HAS_STATIC_QUERY_ID: bool = true;
         }
-        impl NotNull for #diesel_mapping {}
+        impl SqlType for #diesel_mapping {
+            type IsNull = is_nullable::NotNull;
+        }
         impl SingleValue for #diesel_mapping {}
 
         impl AsExpression<#diesel_mapping> for #enum_ty {
@@ -277,18 +279,17 @@ fn generate_postgres_impl(
             }
 
             impl FromSqlRow<#diesel_mapping, Pg> for #enum_ty {
-                fn build_from_row<T: Row<Pg>>(row: &mut T) -> deserialize::Result<Self> {
+                fn build_from_row<'a>(row: &impl Row<Pg>) -> deserialize::Result<Self> {
                     FromSql::<#diesel_mapping, Pg>::from_sql(row.take())
                 }
             }
 
             impl FromSql<#diesel_mapping, Pg> for #enum_ty {
-                fn from_sql(raw: Option<PgValue>) -> deserialize::Result<Self> {
-                    match raw.as_ref().map(|r| r.as_bytes()) {
-                        #(Some(#variants_db) => Ok(#variants_rs),)*
-                        Some(v) => Err(format!("Unrecognized enum variant: '{}'",
+                fn from_sql(raw: PgValue) -> deserialize::Result<Self> {
+                    match raw.as_bytes() {
+                        #(#variants_db => Ok(#variants_rs),)*
+                        v => Err(format!("Unrecognized enum variant: '{}'",
                                                String::from_utf8_lossy(v)).into()),
-                        None => Err("Unexpected null for non-null column".into()),
                     }
                 }
             }
